@@ -11,17 +11,15 @@ import sys
 
 year = sys.argv[1] # Specify the year of the classification
 
-# Specify the path to your raster file
-
+# Specify the paths
 raster_path = f"../classification/raw_classified/classification{year}.tif"
 reproj_path = f"../classification/reprojected/reproject_{year}.tif"
 vector_path = f"../classification/vectorized/vector_{year}.geojson"
 reclassif_filter_tif = f"../classification/reclassified/reclassif_filter_{year}.tif"
-#UTM South 327 + 20 = 32720 (UTM North 326...) (UTM 20S Bolivia)
+#UTM South 327 + 20 = 32720 (note: UTM North is 326 + zone...) (UTM 20S Bolivia)
 dst_crs = 'EPSG:32720' # Specify the CRS of the output raster
 
 # Open the raster file
-
 with rasterio.open(raster_path) as src:
     transform, width, height = calculate_default_transform(
         src.crs, dst_crs, src.width, src.height, *src.bounds)
@@ -34,7 +32,7 @@ with rasterio.open(raster_path) as src:
         'height': height,
         'dtype': 'int16'
     })
-
+    #reproject the source raster to the new CRS
     with rasterio.open(reproj_path, 'w', **kwargs) as dst:
         for i in range(1, src.count + 1):
             data = rasterio.band(src, i)
@@ -48,18 +46,21 @@ with rasterio.open(raster_path) as src:
                 resampling=Resampling.nearest)
 
 
-
+    # Open the reprojected raster file
     with rasterio.open(reproj_path, 'r+') as src:
         # Read the raster data
         raster = src.read(1)
 
-        # Assign labels 1, 3, 4 to 1
-        raster = np.where((raster == 3) | (raster == 4), 1, raster)
+        raster = np.where(raster == 3, 1, raster) #reclassify agriculture to non-forest
+        raster = np.where(raster == 4, 1, raster) #reclassify bare soil to non-forest
         # Write the modified raster data back to the file
         src.write(raster, 1)
-
+        # Set the nodata value to 0
         raster[np.isnan(raster)] = 0
+        # Make sure the data type is int16
         raster = raster.astype('int16')
+
+        # Moving window filter
         ws = 3 # Must be a odd number 3x3, 5x5, 7x7, ... (filtering post classification)
         sizey = raster.shape[0]
         sizex = raster.shape[1]
@@ -69,7 +70,7 @@ with rasterio.open(raster_path) as src:
         X = np.pad(raster, ((rad_wind,rad_wind),(rad_wind,rad_wind)), 'edge')
 
         majority = np.empty((sizey,sizex), dtype='int16')
-
+        
         for i in range(sizey):
             for j in range(sizex):
                 window = X[i:i+ws , j:j+ws]
@@ -79,7 +80,7 @@ with rasterio.open(raster_path) as src:
                 majority[i,j]= maj
 
         majority = majority.reshape((1,sizey,sizex))
-
+        # Write the majority filter raster data to new file
         with rasterio.open(reproj_path) as src:
             profile = src.profile
 
