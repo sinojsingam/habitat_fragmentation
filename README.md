@@ -29,7 +29,7 @@ In total, 7 imports were used:
     ```
  - ESA and UCLouvain GlobCover: Global Land Cover Map
      ```javascript
-    ee.Image("ESA/GLOBCOVER_L4_200901_200912_V2_3")
+    var globcover = ee.Image("ESA/GLOBCOVER_L4_200901_200912_V2_3")
     ```
  - Geometry objects for classification created in the Google Earth Engine platform for each year.
     - Water
